@@ -1,0 +1,183 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Demo Pods and mTLS Flows" id="demo-pods">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Cluster 1 box -->
+        <mxCell id="c1box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=0;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="440" height="440" as="geometry"/>
+        </mxCell>
+        <mxCell id="c1label" value="&lt;b&gt;Cluster 1 (sno1-ext)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#3366CC;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="160" y="30" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Cluster 2 box -->
+        <mxCell id="c2box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=0;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="560" y="60" width="440" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2label" value="&lt;b&gt;Cluster 2 (sno2-ext)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#3366CC;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="30" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== Cluster 1 Pods ===== -->
+
+        <!-- secure-server -->
+        <mxCell id="secsvr" value="&lt;b&gt;secure-server&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;server-sa&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#3366CC;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="180" y="90" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="secsvr_port" value=":8443 mTLS" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#888888;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="215" y="140" width="80" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- secure-client -->
+        <mxCell id="seccli" value="&lt;b&gt;secure-client&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;client-sa&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#22c55e;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="200" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- secure-rogue -->
+        <mxCell id="secrog" value="&lt;b&gt;secure-rogue&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;rogue-sa&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#ef4444;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="200" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- insecure-server -->
+        <mxCell id="insecsvr" value="&lt;b&gt;insecure-server&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;no auth&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#f59e0b;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="400" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="insecsvr_port" value=":8080 HTTP" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#888888;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="100" y="450" width="70" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- dashboard -->
+        <mxCell id="dash" value="&lt;b&gt;dashboard&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;web UI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="400" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== Cluster 2 Pods ===== -->
+
+        <!-- remote-client -->
+        <mxCell id="remcli" value="&lt;b&gt;remote-client&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;client-sa&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#22c55e;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="620" y="110" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- remote-rogue -->
+        <mxCell id="remrog" value="&lt;b&gt;remote-rogue&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot; color=&quot;#888&quot;&gt;rogue-sa&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#ef4444;arcSize=10;" vertex="1" parent="1">
+          <mxGeometry x="620" y="220" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== mTLS Arrows: agents → secure-server ===== -->
+
+        <!-- secure-client → secure-server (ALLOW) -->
+        <mxCell id="a1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#22c55e;strokeWidth=2;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.25;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="seccli" target="secsvr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a1lbl" value="&lt;b&gt;&lt;font color=&quot;#22c55e&quot;&gt;ALLOW&lt;/font&gt;&lt;/b&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="a1">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint x="-20" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- secure-rogue → secure-server (DENY) -->
+        <mxCell id="a2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#ef4444;strokeWidth=2;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="secrog" target="secsvr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2lbl" value="&lt;b&gt;&lt;font color=&quot;#ef4444&quot;&gt;DENY&lt;/font&gt;&lt;/b&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="a2">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint x="20" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- remote-client → secure-server (ALLOW, dashed / cross-cluster) -->
+        <mxCell id="a3" style="rounded=1;strokeColor=#22c55e;strokeWidth=2;dashed=1;dashPattern=8 4;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="remcli" target="secsvr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3lbl" value="&lt;b&gt;&lt;font color=&quot;#22c55e&quot;&gt;ALLOW&lt;/font&gt;&lt;/b&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="a3">
+          <mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint y="-10" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- remote-rogue → secure-server (DENY, dashed / cross-cluster) -->
+        <mxCell id="a4" style="rounded=1;strokeColor=#ef4444;strokeWidth=2;dashed=1;dashPattern=8 4;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="remrog" target="secsvr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4lbl" value="&lt;b&gt;&lt;font color=&quot;#ef4444&quot;&gt;DENY&lt;/font&gt;&lt;/b&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="a4">
+          <mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint y="10" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <mxCell id="ptlbl" value="&lt;font color=&quot;#888&quot; size=&quot;1&quot;&gt;via passthrough Route&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="440" y="155" width="120" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== dashboard → insecure-server (OPEN) ===== -->
+        <mxCell id="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#f59e0b;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="dash" target="insecsvr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="a5lbl" value="&lt;b&gt;&lt;font color=&quot;#f59e0b&quot;&gt;OPEN&lt;/font&gt;&lt;/b&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="a5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== dashboard → local test agents (polls /status) ===== -->
+        <mxCell id="d1" style="rounded=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=4 4;exitX=0.25;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="dash" target="seccli">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1lbl" value="&lt;font color=&quot;#999&quot; size=&quot;1&quot;&gt;polls /status&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="d1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="-15" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <mxCell id="d2" style="rounded=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=4 4;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="dash" target="secrog">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2lbl" value="&lt;font color=&quot;#999&quot; size=&quot;1&quot;&gt;polls /status&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="d2">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="15" as="offset"/></mxGeometry>
+        </mxCell>
+
+        <!-- ===== dashboard → remote test agents (polls /status via edge Routes) ===== -->
+        <mxCell id="d3" style="rounded=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=4 4;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="dash" target="remcli">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3lbl" value="&lt;font color=&quot;#999&quot; size=&quot;1&quot;&gt;polls /status&lt;br&gt;(edge Route)&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="d3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="d4" style="rounded=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=4 4;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="dash" target="remrog">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="d4lbl" value="&lt;font color=&quot;#999&quot; size=&quot;1&quot;&gt;polls /status&lt;br&gt;(edge Route)&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="d4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== Legend ===== -->
+        <mxCell id="leg_title" value="&lt;b&gt;Legend&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="830" y="350" width="60" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg1" value="" style="endArrow=classic;html=1;strokeColor=#22c55e;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="830" y="395" as="sourcePoint"/><mxPoint x="870" y="395" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="leg1t" value="&lt;font color=&quot;#22c55e&quot;&gt;ALLOW (mTLS)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="875" y="385" width="80" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg2" value="" style="endArrow=classic;html=1;strokeColor=#ef4444;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="830" y="415" as="sourcePoint"/><mxPoint x="870" y="415" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="leg2t" value="&lt;font color=&quot;#ef4444&quot;&gt;DENY (mTLS)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="875" y="405" width="80" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg3" value="" style="endArrow=classic;html=1;strokeColor=#f59e0b;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="830" y="435" as="sourcePoint"/><mxPoint x="870" y="435" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="leg3t" value="&lt;font color=&quot;#f59e0b&quot;&gt;OPEN (no auth)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="875" y="425" width="90" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg4" value="" style="endArrow=classic;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=4 4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="830" y="455" as="sourcePoint"/><mxPoint x="870" y="455" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="leg4t" value="&lt;font color=&quot;#999&quot;&gt;dashboard poll&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="875" y="445" width="90" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg5" value="" style="endArrow=classic;html=1;strokeColor=#22c55e;strokeWidth=2;dashed=1;dashPattern=8 4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="830" y="475" as="sourcePoint"/><mxPoint x="870" y="475" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="leg5t" value="&lt;font color=&quot;#999&quot;&gt;cross-cluster&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="875" y="465" width="80" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

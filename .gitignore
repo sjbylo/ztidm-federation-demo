@@ -1,0 +1,10 @@
+# Generated YAML output directories (one per cluster)
+mesh*/
+sno*/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
