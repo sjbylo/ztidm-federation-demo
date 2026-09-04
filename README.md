@@ -33,15 +33,20 @@ A **web dashboard** shows all five results in real-time.
 - **`oc` CLI** (4.16+)
 - **`jq`**, **`curl`** on the workstation
 
-### DNS requirement for SPIRE agent
+### DNS requirement for SPIRE agent (only for short node hostnames)
 
 The ZTIDM SPIRE agent runs **without `hostNetwork`** (it uses
 `hostPID: true` but standard pod networking with `dnsPolicy: ClusterFirst`).
-The kubelet workload attestor resolves the node hostname from inside a
-pod — so **node short hostnames must be resolvable via ClusterFirst DNS**.
+The kubelet workload attestor resolves the Kubernetes node name from
+inside a pod via ClusterFirst DNS.
 
-If your nodes use short hostnames (e.g. `sno1`, `mesh1`) that aren't in
-the cluster's upstream DNS, you need to either:
+**Most users won't need any action here.** If your nodes have FQDN names
+(e.g. `node1.ocp.example.com`, `ip-10-0-1-42.ec2.internal`) — which is
+the default for IPI, cloud, and most UPI installs — DNS resolution works
+automatically.
+
+If your nodes use **short hostnames** (e.g. `sno1`, `mesh1`) that aren't
+in the cluster's upstream DNS, you need to either:
 
 1. Add the records to your DNS server, **or**
 2. Use a lightweight forwarder (e.g. `dnsmasq` on a bastion host) and
