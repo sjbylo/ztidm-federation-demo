@@ -33,12 +33,12 @@ A **web dashboard** shows all five results in real-time.
 - **`oc` CLI** (4.16+)
 - **`jq`**, **`curl`** on the workstation
 
-### DNS requirement for SPIRE agent (ZTIDM v1.1.1+)
+### DNS requirement for SPIRE agent
 
-Starting with ZTIDM v1.1.1 (April 2026), the SPIRE agent runs **without
-`hostNetwork`**. The kubelet workload attestor resolves the node hostname
-from inside a pod — so **node short hostnames must be resolvable via
-ClusterFirst DNS**.
+The ZTIDM SPIRE agent runs **without `hostNetwork`** (it uses
+`hostPID: true` but standard pod networking with `dnsPolicy: ClusterFirst`).
+The kubelet workload attestor resolves the node hostname from inside a
+pod — so **node short hostnames must be resolvable via ClusterFirst DNS**.
 
 If your nodes use short hostnames (e.g. `sno1`, `mesh1`) that aren't in
 the cluster's upstream DNS, you need to either:
