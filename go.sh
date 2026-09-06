@@ -38,7 +38,11 @@ APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
 SC1=$(oc1 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
 SC2=$(oc2 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
 
-# Trust domain = apps domain (Red Hat recommended so managed Routes resolve via DNS wildcard)
+# DEMO-HIGHLIGHT: Trust Domain = Apps Domain
+# The trust domain is the root of all SPIFFE IDs on this cluster.
+# Using the *.apps domain means federation Routes (federation.<apps-domain>)
+# resolve automatically via OpenShift's wildcard DNS — no extra DNS config needed.
+# WARNING: trust domain is IMMUTABLE once set. Changing it requires full reinstall.
 TD1="$APPS1"
 TD2="$APPS2"
 
@@ -354,6 +358,11 @@ fi
 echo
 echo "--- Create ClusterFederatedTrustDomain resources ---"
 
+# DEMO-HIGHLIGHT: Cross-Cluster Trust Establishment
+# ClusterFederatedTrustDomain tells SPIRE: "trust this remote cluster".
+# Each cluster gets a resource pointing to the OTHER cluster's federation endpoint.
+# The bundleEndpointProfile "https_spiffe" means SPIRE fetches the remote cluster's
+# CA bundle automatically and keeps it up-to-date — no manual cert exchange needed.
 echo "On $CN1: federation-to-${CN2}..."
 tee $CN1/09-ClusterFederatedTrustDomain.yaml <<EOF | oc1 apply -f -
 apiVersion: spire.spiffe.io/v1alpha1

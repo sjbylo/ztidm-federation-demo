@@ -57,11 +57,12 @@ REMOTE_CLIENT_ROUTE="remote-client-${NS}.${APPS2}"
 REMOTE_ROGUE_ROUTE="remote-rogue-${NS}.${APPS2}"
 DASHBOARD_ROUTE="dashboard-${NS}.${APPS1}"
 
-# SPIFFE IDs the secure server will accept. The format is:
-#   spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>
-# Two entries: one for the local cluster's client-sa, one for the
-# federated (remote) cluster's client-sa. This is the core of Zero Trust:
-# the server allow-lists specific cryptographic identities, not IPs or networks.
+# DEMO-HIGHLIGHT: Zero Trust Allow-List (SPIFFE IDs)
+# These are the ONLY identities the secure server will accept.
+# Format: spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>
+# Two entries: one local client-sa, one from the FEDERATED cluster's client-sa.
+# This IS Zero Trust: the server allow-lists cryptographic identities, not IPs or networks.
+# Any pod without a matching SPIFFE ID — even on the same cluster — gets HTTP 403.
 ALLOWED_IDS="spiffe://${TD1}/ns/${NS}/sa/client-sa,spiffe://${TD2}/ns/${NS}/sa/client-sa"
 
 mkdir -p "$CN1" "$CN2"
@@ -125,13 +126,12 @@ cp $CN1/demo-02-ServiceAccounts.yaml $CN2/demo-02-ServiceAccounts.yaml
 oc1 apply -f $CN1/demo-02-ServiceAccounts.yaml
 oc2 apply -f $CN2/demo-02-ServiceAccounts.yaml
 
-# KEY RESOURCE: ClusterSPIFFEID with federatesWith
-# The default ClusterSPIFFEID (created by the operator) assigns SPIFFE IDs to
-# all pods but does NOT include federated trust bundles. Without "federatesWith",
-# workloads only receive their LOCAL trust domain's CA bundle via the SPIFFE
-# Workload API -- they cannot verify certs from the other cluster.
-# These ClusterSPIFFEIDs tell SPIRE: "give pods in this namespace the federated
-# trust bundle too", so they can do cross-cluster mTLS.
+# DEMO-HIGHLIGHT: ClusterSPIFFEID — Enables Cross-Cluster Cert Verification
+# Without "federatesWith", workloads only receive their LOCAL trust domain's CA.
+# They can do mTLS within the same cluster, but cannot verify certs from another cluster.
+# Adding "federatesWith" tells SPIRE: "also give pods the federated cluster's CA bundle",
+# so they can verify and trust SVIDs from the remote cluster. This is what makes
+# cross-cluster mTLS possible — without it, the TLS handshake fails.
 echo "--- ClusterSPIFFEID with federatesWith (workloads receive federated trust bundles) ---"
 tee $CN1/demo-03-ClusterSPIFFEID.yaml <<EOF
 apiVersion: spire.spiffe.io/v1alpha1
@@ -226,10 +226,12 @@ data:
         raise RuntimeError(f"SPIFFE socket not found at {path} within {timeout}s")
 
     def save_all_bundles(path):
-        # IMPORTANT: Uses FetchX509Bundles API (not FetchX509SVID) to get ALL
-        # trust bundles including federated ones. Without this, workloads only
-        # get their local trust domain's CA and cannot verify cross-cluster certs.
-        # This requires ClusterSPIFFEID.spec.federatesWith to be configured.
+        # DEMO-HIGHLIGHT: Fetch ALL Trust Bundles (Including Federated)
+        # FetchX509Bundles returns CA certs from EVERY trusted domain, not just local.
+        # This is what makes cross-cluster mTLS work: the server loads both its own
+        # CA and the federated cluster's CA, so it can verify certs from either cluster.
+        # Requires ClusterSPIFFEID.spec.federatesWith to be configured — otherwise
+        # SPIRE only returns the local trust domain's CA.
         with WorkloadApiClient() as client:
             bundle_set = client.fetch_x509_bundles()
         count = 0
@@ -242,13 +244,22 @@ data:
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            # Extract the caller's SPIFFE ID from the mTLS client certificate
+            # DEMO-HIGHLIGHT: Extract Caller's Identity from Certificate
+            # The client's SPIFFE ID is embedded in the X.509 cert's URI SAN field.
+            # Example: spiffe://apps.sno2.example.com/ns/demo-zero-trust/sa/client-sa
+            # This is NOT a hostname or IP — it's a cryptographic identity that encodes
+            # the trust domain, namespace, and service account. You can't forge it.
             peer = self.connection.getpeercert()
             san_list = peer.get("subjectAltName", [])
             uris = [v for k, v in san_list if k == "URI"]
             peer_id = uris[0] if uris else ""
 
-            # Zero Trust decision: is this specific identity allowed?
+            # DEMO-HIGHLIGHT: The Zero Trust Decision — Allow or Deny
+            # This is the actual access control check. The server compares the caller's
+            # SPIFFE ID against the allow-list. Allowed = HTTP 200. Not allowed = HTTP 403.
+            # No IP checks, no network policies, no firewall rules — just cryptographic identity.
+            # A "rogue" pod on the SAME cluster with a different ServiceAccount gets DENIED.
+            # An authorized pod on a DIFFERENT cluster with the right identity gets ALLOWED.
             if peer_id not in self.server.allowed_spiffe_ids:
                 self.send_response(403)
                 self.end_headers()
@@ -264,7 +275,13 @@ data:
 
     wait_for_socket(SPIFFE_SOCKET_PATH)
 
-    # Get this pod's X.509-SVID from the SPIRE Agent (auto-issued, short-lived)
+    # DEMO-HIGHLIGHT: SVID Acquisition — "Who Am I?"
+    # This is where the workload gets its cryptographic identity from SPIRE.
+    # X509Source() connects to the SPIRE Agent via the CSI-mounted Unix socket.
+    # The Agent has already attested this pod (verified its ServiceAccount, namespace,
+    # node) and returns a short-lived X.509 certificate (SVID) — valid for just 1 hour.
+    # The SVID contains the pod's SPIFFE ID in the URI SAN field of the certificate.
+    # No secrets, no manual cert creation — SPIRE handles the full lifecycle.
     source = X509Source()
     x509_ctx = source.get_x509_context()
     svid = x509_ctx.default_svid
@@ -283,8 +300,12 @@ data:
     svid.save(cert_path, key_path, Encoding.PEM)
     save_all_bundles(ca_path)
 
-    # Set up mTLS: server presents its SVID, REQUIRES client cert, and verifies
-    # the client cert against all trusted CAs (local + federated trust domains)
+    # DEMO-HIGHLIGHT: Mutual TLS Enforcement
+    # CERT_REQUIRED = every client MUST present a valid X.509 certificate.
+    # No cert? Connection refused. Invalid cert? Connection refused.
+    # The server presents its own SVID (load_cert_chain) and verifies client certs
+    # against ALL trusted CAs (load_verify_locations) — both local and federated.
+    # This is the difference between "encrypted" (one-way TLS) and "Zero Trust" (mTLS).
     server = HTTPServer((HOST, PORT), Handler)
     server.allowed_spiffe_ids = allowed
     ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -293,10 +314,12 @@ data:
     ctx.load_verify_locations(cafile=ca_path)  # trusted CAs (both trust domains)
     server.socket = ctx.wrap_socket(server.socket, server_side=True)
 
-    # Background thread: refresh SVID and CA bundles before they expire.
-    # SPIRE SVIDs are short-lived (default 1h) and the CA rotates (default 24h).
-    # Updating the SSLContext in-place affects all NEW connections; existing
-    # connections keep their original certs (which is fine for short requests).
+    # DEMO-HIGHLIGHT: Hot Certificate Reload — Zero Downtime Rotation
+    # SVIDs are short-lived (1 hour) and the CA rotates every 24 hours.
+    # This background thread refreshes both BEFORE they expire — no restarts needed.
+    # Every 5 minutes: get fresh SVID from SPIRE, reload all CA bundles, update the
+    # SSL context in-place. New connections use the fresh certs automatically.
+    # This is why Zero Trust doesn't mean "operational burden" — cert lifecycle is automatic.
     def refresh_certs():
         while True:
             time.sleep(300)
@@ -426,9 +449,11 @@ data:
                 fresh_svid.save(cert_path, key_path, Encoding.PEM)
                 save_all_bundles(ca_path)
 
-            # Build mTLS context: verify server cert against all CAs,
-            # present our SVID as client cert. check_hostname=False because
-            # SPIFFE uses URI SANs (not DNS) for identity.
+            # DEMO-HIGHLIGHT: SPIFFE Identity Model — URI SANs, Not Hostnames
+            # check_hostname=False because SPIFFE doesn't use DNS names for identity.
+            # Instead, identity is a URI SAN: spiffe://<trust-domain>/ns/<ns>/sa/<sa>
+            # The cert is still fully verified (CERT_REQUIRED + trusted CA chain) —
+            # we just skip the DNS hostname match because SPIFFE IDs aren't hostnames.
             ctx = ssl.create_default_context(cafile=ca_path)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_REQUIRED
@@ -845,8 +870,12 @@ spec:
       labels:
         app: secure-server
     spec:
-      # KEY: serviceAccountName determines the pod's SPIFFE ID:
+      # DEMO-HIGHLIGHT: ServiceAccount = Cryptographic Identity
+      # The pod's SPIFFE ID is derived from its ServiceAccount:
       #   spiffe://<trust-domain>/ns/demo-zero-trust/sa/server-sa
+      # This is NOT a label or annotation — SPIRE cryptographically attests the pod
+      # and issues an X.509 certificate (SVID) with this identity baked in.
+      # Changing the ServiceAccount changes the identity. No secrets to manage.
       serviceAccountName: server-sa
       containers:
       - name: secure-server
@@ -879,8 +908,12 @@ spec:
         - name: app-scripts
           configMap:
             name: mtls-demo-scripts
-        # KEY: The CSI volume triggers SPIRE to attest this pod and provide
-        # X.509-SVIDs and trust bundles via the Workload API socket
+        # DEMO-HIGHLIGHT: SPIFFE CSI Driver — Cert Delivery Mechanism
+        # This CSI volume mount is how SPIRE delivers certificates to pods.
+        # When Kubernetes schedules this pod, the CSI driver tells the SPIRE Agent:
+        # "attest this workload and provide its SVID". The Agent verifies the pod's
+        # identity (ServiceAccount, namespace, node) and exposes a Unix socket at
+        # the mount path. The app reads certs from this socket — no Secrets needed.
         - name: spiffe-workload-api
           csi:
             driver: csi.spiffe.io
@@ -899,10 +932,13 @@ spec:
       port: 8443
       targetPort: 8443
 ---
-# KEY: passthrough Route -- OpenShift ingress does NOT terminate TLS.
-# The SPIRE-issued SVID certificate goes end-to-end from the pod to the
-# remote client. This is essential for mTLS: the client verifies the
-# server's SPIFFE certificate directly, not an ingress-issued cert.
+# DEMO-HIGHLIGHT: Passthrough Route — End-to-End mTLS
+# "passthrough" means OpenShift's ingress does NOT terminate TLS.
+# The SPIRE-issued SVID certificate goes end-to-end: from the remote client
+# pod on Cluster 2, across the network, directly to this server pod.
+# The client verifies the server's SPIFFE cert (not an ingress cert), and
+# the server verifies the client's SPIFFE cert. True mutual TLS, no middleman.
+# If this were "edge" or "reencrypt", the ingress would break the mTLS chain.
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
@@ -1164,9 +1200,14 @@ echo "=========================================="
 echo "  Phase 4: Deploy Remote Test Agents on Cluster 2 ($CN2)"
 echo "=========================================="
 
-# KEY DEPLOYMENT: Remote client on Cluster 2 connecting to secure-server on Cluster 1
-# This demonstrates SPIRE federation: a workload on a different cluster, with a
-# different trust domain, authenticates via mTLS using federated trust bundles.
+# DEMO-HIGHLIGHT: Cross-Cluster mTLS — The Federation "Wow" Moment
+# This pod runs on Cluster 2 but connects to secure-server on Cluster 1.
+# It has a DIFFERENT trust domain, yet authenticates successfully because:
+#   1. ClusterFederatedTrustDomain established trust between clusters
+#   2. ClusterSPIFFEID.federatesWith gives this pod the remote cluster's CA
+#   3. The server's allow-list includes this pod's SPIFFE ID
+#   4. The passthrough Route preserves end-to-end mTLS
+# Result: cross-cluster Zero Trust authentication with no shared secrets.
 echo
 echo "--- Remote Client (authorized, cross-cluster) ---"
 
