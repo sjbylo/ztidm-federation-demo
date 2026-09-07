@@ -57,8 +57,7 @@ else
 	CN2="" APPS2=""
 fi
 
-# Trust domain = apps domain (Red Hat recommended so federation Routes resolve
-# via the *.apps wildcard DNS entry without extra Route configuration)
+# Trust domain = apps domain (federation Routes resolve via *.apps wildcard DNS)
 TD1="$APPS1"
 TD2="$APPS2"
 
@@ -74,10 +73,7 @@ else
 fi
 
 # DEMO-HIGHLIGHT: Zero Trust Allow-List (SPIFFE IDs)
-# These are the ONLY identities the secure server will accept.
-# Format: spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>
-# This IS Zero Trust: the server allow-lists cryptographic identities, not IPs or networks.
-# Any pod without a matching SPIFFE ID — even on the same cluster — gets HTTP 403.
+# Only these identities are accepted. All others get HTTP 403.
 ALLOWED_IDS="spiffe://${TD1}/ns/${NS}/sa/client-sa"
 $FEDERATION && ALLOWED_IDS="${ALLOWED_IDS},spiffe://${TD2}/ns/${NS}/sa/client-sa"
 
@@ -119,9 +115,7 @@ if $FEDERATION; then
 	oc2 apply -f $CN2/demo-01-Namespace.yaml
 fi
 
-# ServiceAccounts determine SPIFFE IDs. Each pod's identity is derived from:
-#   spiffe://<trust-domain>/ns/<namespace>/sa/<service-account-name>
-# The server's allow-list references these identities, not pod IPs or names.
+# ServiceAccounts determine SPIFFE IDs: spiffe://<trust-domain>/ns/<ns>/sa/<sa-name>
 tee $CN1/demo-02-ServiceAccounts.yaml <<EOF
 apiVersion: v1
 kind: ServiceAccount
@@ -149,11 +143,8 @@ fi
 
 if $FEDERATION; then
 # DEMO-HIGHLIGHT: ClusterSPIFFEID — Enables Cross-Cluster Cert Verification
-# Without "federatesWith", workloads only receive their LOCAL trust domain's CA.
-# They can do mTLS within the same cluster, but cannot verify certs from another cluster.
-# Adding "federatesWith" tells SPIRE: "also give pods the federated cluster's CA bundle",
-# so they can verify and trust SVIDs from the remote cluster. This is what makes
-# cross-cluster mTLS possible — without it, the TLS handshake fails.
+# "federatesWith" gives pods the remote cluster's CA bundle,
+# enabling cross-cluster mTLS. Without it, TLS handshake fails.
 echo "--- ClusterSPIFFEID with federatesWith (workloads receive federated trust bundles) ---"
 tee $CN1/demo-03-ClusterSPIFFEID.yaml <<EOF
 apiVersion: spire.spiffe.io/v1alpha1
@@ -1459,14 +1450,10 @@ echo "=========================================="
 echo "  Phase 4: Deploy Remote Test Agents on Cluster 2 ($CN2)"
 echo "=========================================="
 
-# DEMO-HIGHLIGHT: Cross-Cluster mTLS — The Federation "Wow" Moment
-# This pod runs on Cluster 2 but connects to secure-server on Cluster 1.
-# It has a DIFFERENT trust domain, yet authenticates successfully because:
-#   1. ClusterFederatedTrustDomain established trust between clusters
-#   2. ClusterSPIFFEID.federatesWith gives this pod the remote cluster's CA
-#   3. The server's allow-list includes this pod's SPIFFE ID
-#   4. The passthrough Route preserves end-to-end mTLS
-# Result: cross-cluster Zero Trust authentication with no shared secrets.
+# DEMO-HIGHLIGHT: Cross-Cluster mTLS
+# This pod runs on Cluster 2 but connects to secure-server on Cluster 1
+# via passthrough Route. Different trust domain, but accepted because
+# federation + allow-list are both configured.
 echo
 echo "--- Remote Client (authorized, cross-cluster) ---"
 

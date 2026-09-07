@@ -53,10 +53,8 @@ else
 fi
 
 # DEMO-HIGHLIGHT: Trust Domain = Apps Domain
-# The trust domain is the root of all SPIFFE IDs on this cluster.
-# Using the *.apps domain means federation Routes (federation.<apps-domain>)
-# resolve automatically via OpenShift's wildcard DNS — no extra DNS config needed.
-# WARNING: trust domain is IMMUTABLE once set. Changing it requires full reinstall.
+# Uses *.apps domain so federation Routes resolve via wildcard DNS automatically.
+# WARNING: trust domain is IMMUTABLE once set.
 TD1="$APPS1"
 TD2="$APPS2"
 
@@ -353,23 +351,25 @@ echo "  $CN2: $FED2"
 
 ###############################################
 echo
-echo "--- Fetch trust bundles ---"
+echo "--- Fetch trust bundles (from inside the clusters) ---"
 
 echo "Fetching from $CN2 ($FED2)..."
-BUNDLE2=$(curl -sk "$FED2")
+BUNDLE2=$(oc1 exec -n $NS statefulset/spire-server -c spire-server -- curl -sk "$FED2" 2>/dev/null)
 echo "  Keys: $(echo "$BUNDLE2" | jq -r '.keys | length')"
 
 echo "Fetching from $CN1 ($FED1)..."
-BUNDLE1=$(curl -sk "$FED1")
+BUNDLE1=$(oc2 exec -n $NS statefulset/spire-server -c spire-server -- curl -sk "$FED1" 2>/dev/null)
 echo "  Keys: $(echo "$BUNDLE1" | jq -r '.keys | length')"
 
 if ! echo "$BUNDLE1" | jq -e '.keys' >/dev/null 2>&1; then
-	echo "ERROR: Bundle from $CN1 is not valid. Check: curl -sk $FED1"
+	echo "ERROR: Bundle from $CN1 is not valid."
+	echo "  Debug: oc exec -n $NS statefulset/spire-server -c spire-server -- curl -sk $FED1"
 	exit 1
 fi
 
 if ! echo "$BUNDLE2" | jq -e '.keys' >/dev/null 2>&1; then
-	echo "ERROR: Bundle from $CN2 is not valid. Check: curl -sk $FED2"
+	echo "ERROR: Bundle from $CN2 is not valid."
+	echo "  Debug: oc exec -n $NS statefulset/spire-server -c spire-server -- curl -sk $FED2"
 	exit 1
 fi
 
@@ -378,10 +378,8 @@ echo
 echo "--- Create ClusterFederatedTrustDomain resources ---"
 
 # DEMO-HIGHLIGHT: Cross-Cluster Trust Establishment
-# ClusterFederatedTrustDomain tells SPIRE: "trust this remote cluster".
 # Each cluster gets a resource pointing to the OTHER cluster's federation endpoint.
-# The bundleEndpointProfile "https_spiffe" means SPIRE fetches the remote cluster's
-# CA bundle automatically and keeps it up-to-date — no manual cert exchange needed.
+# "https_spiffe" means SPIRE auto-fetches and refreshes the remote CA bundle.
 echo "On $CN1: federation-to-${CN2}..."
 tee $CN1/09-ClusterFederatedTrustDomain.yaml <<EOF | oc1 apply -f -
 apiVersion: spire.spiffe.io/v1alpha1
@@ -465,12 +463,12 @@ if $FEDERATION; then
 	oc2 get clusterfederatedtrustdomains
 
 	echo
-	echo "Federation endpoint health check..."
-	KEYS1=$(curl -sk "$FED1" | jq -r '.keys | length')
+	echo "Federation endpoint health check (from inside clusters)..."
+	KEYS1=$(oc2 exec -n $NS statefulset/spire-server -c spire-server -- curl -sk "$FED1" 2>/dev/null | jq -r '.keys | length')
 	test "$KEYS1" -gt 0 || { echo "ERROR: $CN1 federation endpoint returned no keys ($FED1)"; exit 1; }
 	echo "  $CN1: $KEYS1 keys"
 
-	KEYS2=$(curl -sk "$FED2" | jq -r '.keys | length')
+	KEYS2=$(oc1 exec -n $NS statefulset/spire-server -c spire-server -- curl -sk "$FED2" 2>/dev/null | jq -r '.keys | length')
 	test "$KEYS2" -gt 0 || { echo "ERROR: $CN2 federation endpoint returned no keys ($FED2)"; exit 1; }
 	echo "  $CN2: $KEYS2 keys"
 fi
