@@ -2,13 +2,13 @@
 # Zero Trust Demo - Pod-to-Pod mTLS on one or two federated clusters
 #
 # Prerequisites:
-#   - go.sh has been run successfully (ZTIDM + SPIRE operational)
+#   - go-infra.sh has been run successfully (ZTIDM + SPIRE operational)
 #   - Cluster(s) have the SPIFFE CSI driver and agents running
 #
 # Usage:
-#   Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./demo-go.sh
-#   Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./demo-go.sh
-#   Non-interactive: ./demo-go.sh --yes
+#   Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./go-demo.sh
+#   Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./go-demo.sh
+#   Non-interactive: ./go-demo.sh --yes
 #
 # Re-runnable: safe to run again (oc apply is idempotent)
 # Generated YAML saved to ./<cluster-name>/demo-* for inspection

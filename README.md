@@ -44,10 +44,10 @@ export KUBECONFIG2=~/.kube/cluster2
 ./install_and_config_lvm_op.sh
 
 # Install ZTIDM + SPIRE (+ federation if two clusters)
-./go.sh --yes
+./go-infra.sh --yes
 
 # Deploy the demo
-./demo-go.sh --yes
+./go-demo.sh --yes
 
 # Open the dashboard
 echo "https://dashboard-demo-zero-trust.$(oc --kubeconfig=$KUBECONFIG1 \
@@ -60,10 +60,10 @@ Drop `--yes` for interactive mode (pauses between phases).
 
 ```bash
 # Remove demo app only (keeps ZTIDM infrastructure)
-./demo-delete.sh --yes
+./delete-demo.sh --yes
 
 # Full teardown (operator, CRDs, everything)
-./delete.sh --yes
+./delete-infra.sh --yes
 ```
 
 ## Troubleshooting
@@ -92,10 +92,10 @@ oc patch dns.operator/default --type=merge -p '{
 
 | File | Purpose |
 |------|---------|
-| `go.sh` | Install ZTIDM + SPIRE (+ federation if two clusters) |
-| `demo-go.sh` | Deploy the demo application + dashboard |
-| `delete.sh` | Full teardown |
-| `demo-delete.sh` | Remove demo only (keeps infrastructure) |
+| `go-infra.sh` | Install ZTIDM + SPIRE (+ federation if two clusters) |
+| `go-demo.sh` | Deploy the demo application + dashboard |
+| `delete-infra.sh` | Full teardown |
+| `delete-demo.sh` | Remove demo only (keeps infrastructure) |
 | `install_and_config_lvm_op.sh` | Optional: install LVM Storage |
 | `DEMO-WALKTHROUGH.md` | Guided walkthrough with code links |
 

@@ -7,7 +7,7 @@
 # Usage:
 #   export KUBECONFIG1=~/.kube/sno1
 #   export KUBECONFIG2=~/.kube/sno2   # optional: omit for single-cluster
-#   ./demo-delete.sh
+#   ./delete-demo.sh
 
 YES=false
 [[ "${1:-}" == "--yes" || "${1:-}" == "-y" ]] && YES=true

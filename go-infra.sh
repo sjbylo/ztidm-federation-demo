@@ -1,14 +1,14 @@
 #!/bin/bash -e
 # Full ZTIDM + SPIRE install on one or two clusters (with optional federation)
 #
-# Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./go.sh
-# Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./go.sh
+# Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./go-infra.sh
+# Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./go-infra.sh
 #
 # Expects: clusters with default storage class and OperatorHub access
 #
 # Usage:
-#   ./go.sh          # interactive (pauses between phases)
-#   ./go.sh --yes    # non-interactive (no pauses)
+#   ./go-infra.sh          # interactive (pauses between phases)
+#   ./go-infra.sh --yes    # non-interactive (no pauses)
 #
 # Re-runnable: safe to run again (oc apply/patch are idempotent)
 # Generated YAML saved to ./<cluster-name>/ for inspection/re-apply

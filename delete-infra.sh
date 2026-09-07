@@ -1,12 +1,12 @@
 #!/bin/bash -e
 # Full ZTIDM + SPIRE Federation teardown on one or two clusters
-# Exact reverse of go.sh -- deletes everything in safe dependency order
+# Exact reverse of go-infra.sh -- deletes everything in safe dependency order
 #
 # Usage:
 #   export KUBECONFIG1=~/.kube/sno1
 #   export KUBECONFIG2=~/.kube/sno2   # optional: omit for single-cluster
-#   ./delete.sh          # interactive
-#   ./delete.sh --yes    # non-interactive
+#   ./delete-infra.sh          # interactive
+#   ./delete-infra.sh --yes    # non-interactive
 #
 # Re-runnable: --ignore-not-found on all deletes, safe if partially deleted already
 
