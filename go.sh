@@ -1,10 +1,12 @@
 #!/bin/bash -e
-# Full ZTIDM + SPIRE Federation (https_spiffe) install from scratch on two clusters
+# Full ZTIDM + SPIRE install on one or two clusters (with optional federation)
 #
-# Expects: almost empty clusters with default storage class and OperatorHub access
+# Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./go.sh
+# Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./go.sh
+#
+# Expects: clusters with default storage class and OperatorHub access
 #
 # Usage:
-#   export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2
 #   ./go.sh          # interactive (pauses between phases)
 #   ./go.sh --yes    # non-interactive (no pauses)
 #
@@ -25,18 +27,30 @@ pause() {
 NS=zero-trust-workload-identity-manager
 
 KUBECONFIG1="${KUBECONFIG1:?Export KUBECONFIG1 (e.g. ~/.kube/sno1)}"
-KUBECONFIG2="${KUBECONFIG2:?Export KUBECONFIG2 (e.g. ~/.kube/sno2)}"
+KUBECONFIG2="${KUBECONFIG2:-}"
 
 oc1() { oc --kubeconfig="$KUBECONFIG1" "$@"; }
-oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+if [ -n "$KUBECONFIG2" ]; then
+	oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+	FEDERATION=true
+	CLUSTERS="1 2"
+else
+	FEDERATION=false
+	CLUSTERS="1"
+fi
 
 # Auto-detect cluster info
 CN1=$(oc1 whoami --show-server | cut -d. -f2)
-CN2=$(oc2 whoami --show-server | cut -d. -f2)
 APPS1=$(oc1 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
-APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
 SC1=$(oc1 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
-SC2=$(oc2 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+
+if $FEDERATION; then
+	CN2=$(oc2 whoami --show-server | cut -d. -f2)
+	APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+	SC2=$(oc2 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+else
+	CN2="" APPS2="" SC2=""
+fi
 
 # DEMO-HIGHLIGHT: Trust Domain = Apps Domain
 # The trust domain is the root of all SPIFFE IDs on this cluster.
@@ -47,22 +61,25 @@ TD1="$APPS1"
 TD2="$APPS2"
 
 # Output directories for generated YAML (one per cluster)
-mkdir -p "$CN1" "$CN2"
+mkdir -p "$CN1"
+$FEDERATION && mkdir -p "$CN2"
 
 echo "Cluster 1: $CN1"
 echo "  API:           $(oc1 whoami --show-server)"
 echo "  Apps domain:   $APPS1"
 echo "  Trust domain:  $TD1"
 echo "  Storage class: $SC1"
+if $FEDERATION; then
+	echo
+	echo "Cluster 2: $CN2"
+	echo "  API:           $(oc2 whoami --show-server)"
+	echo "  Apps domain:   $APPS2"
+	echo "  Trust domain:  $TD2"
+	echo "  Storage class: $SC2"
+fi
 echo
-echo "Cluster 2: $CN2"
-echo "  API:           $(oc2 whoami --show-server)"
-echo "  Apps domain:   $APPS2"
-echo "  Trust domain:  $TD2"
-echo "  Storage class: $SC2"
-echo
-echo "Profile: https_spiffe (IMMUTABLE)"
-echo "YAML output: ./$CN1/  ./$CN2/"
+echo "Mode: $($FEDERATION && echo "Two-cluster federation (https_spiffe)" || echo "Single cluster")"
+echo "YAML output: ./$CN1/$($FEDERATION && echo "  ./$CN2/")"
 echo
 echo "Next: Phase 1 -- Install Operator on both clusters"
 pause
@@ -73,7 +90,7 @@ echo "=========================================="
 echo "  Phase 1: Install Operator (both clusters)"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1; OUTDIR=$CN1
 	else
@@ -120,7 +137,7 @@ echo
 echo "Waiting for operator deployments (this may take a few minutes)..."
 pause
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -146,7 +163,7 @@ echo "=========================================="
 echo "  Phase 2: Deploy Operands (both clusters)"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1; TD=$TD1; SC=$SC1; APPS=$APPS1; OUTDIR=$CN1
 	else
@@ -303,6 +320,8 @@ EOF
 
 done
 
+if $FEDERATION; then
+
 echo
 echo "Next: Phase 3 -- Federation Setup (cross-cluster trust)"
 pause
@@ -428,42 +447,52 @@ echo "Wait for rollout..."
 oc1 rollout status statefulset -l app.kubernetes.io/component=control-plane -n $NS --timeout=5m
 oc2 rollout status statefulset -l app.kubernetes.io/component=control-plane -n $NS --timeout=5m
 
+fi  # FEDERATION
+
 ###############################################
 echo
 echo "=========================================="
 echo "  Phase 4: Verification"
 echo "=========================================="
 
-echo
-echo "ClusterFederatedTrustDomains on $CN1:"
-oc1 get clusterfederatedtrustdomains
+if $FEDERATION; then
+	echo
+	echo "ClusterFederatedTrustDomains on $CN1:"
+	oc1 get clusterfederatedtrustdomains
 
-echo
-echo "ClusterFederatedTrustDomains on $CN2:"
-oc2 get clusterfederatedtrustdomains
+	echo
+	echo "ClusterFederatedTrustDomains on $CN2:"
+	oc2 get clusterfederatedtrustdomains
 
-echo
-echo "Federation endpoint health check..."
-KEYS1=$(curl -sk "$FED1" | jq -r '.keys | length')
-test "$KEYS1" -gt 0 || { echo "ERROR: $CN1 federation endpoint returned no keys ($FED1)"; exit 1; }
-echo "  $CN1: $KEYS1 keys"
+	echo
+	echo "Federation endpoint health check..."
+	KEYS1=$(curl -sk "$FED1" | jq -r '.keys | length')
+	test "$KEYS1" -gt 0 || { echo "ERROR: $CN1 federation endpoint returned no keys ($FED1)"; exit 1; }
+	echo "  $CN1: $KEYS1 keys"
 
-KEYS2=$(curl -sk "$FED2" | jq -r '.keys | length')
-test "$KEYS2" -gt 0 || { echo "ERROR: $CN2 federation endpoint returned no keys ($FED2)"; exit 1; }
-echo "  $CN2: $KEYS2 keys"
+	KEYS2=$(curl -sk "$FED2" | jq -r '.keys | length')
+	test "$KEYS2" -gt 0 || { echo "ERROR: $CN2 federation endpoint returned no keys ($FED2)"; exit 1; }
+	echo "  $CN2: $KEYS2 keys"
+fi
 
 echo
 echo "SPIRE Server logs ($CN1, last 10 lines):"
 oc1 logs -n $NS statefulset/spire-server -c spire-server --tail=10
 
-echo
-echo "SPIRE Server logs ($CN2, last 10 lines):"
-oc2 logs -n $NS statefulset/spire-server -c spire-server --tail=10
+if $FEDERATION; then
+	echo
+	echo "SPIRE Server logs ($CN2, last 10 lines):"
+	oc2 logs -n $NS statefulset/spire-server -c spire-server --tail=10
+fi
 
 echo
 echo "Generated YAML saved to:"
-ls -1 $CN1/*.yaml $CN1/*.json
-ls -1 $CN2/*.yaml $CN2/*.json
+ls -1 $CN1/*.yaml $CN1/*.json 2>/dev/null || true
+$FEDERATION && { ls -1 $CN2/*.yaml $CN2/*.json 2>/dev/null || true; }
 
 echo
-echo "DONE -- federation healthy on both clusters."
+if $FEDERATION; then
+	echo "DONE -- federation healthy on both clusters."
+else
+	echo "DONE -- ZTIDM + SPIRE healthy on $CN1."
+fi

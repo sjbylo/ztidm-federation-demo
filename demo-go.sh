@@ -1,28 +1,29 @@
 #!/bin/bash -e
-# Federation Demo - Pod-to-Pod mTLS across two federated clusters
+# Zero Trust Demo - Pod-to-Pod mTLS on one or two federated clusters
 #
 # Prerequisites:
-#   - go.sh has been run successfully (ZTIDM + SPIRE federation operational)
-#   - Both clusters have the SPIFFE CSI driver and agents running
+#   - go.sh has been run successfully (ZTIDM + SPIRE operational)
+#   - Cluster(s) have the SPIFFE CSI driver and agents running
 #
 # Usage:
-#   export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2
-#   ./demo-go.sh          # interactive (pauses between phases)
-#   ./demo-go.sh --yes    # non-interactive (no pauses)
+#   Single cluster:  export KUBECONFIG1=~/.kube/sno1; ./demo-go.sh
+#   Two clusters:    export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2; ./demo-go.sh
+#   Non-interactive: ./demo-go.sh --yes
 #
 # Re-runnable: safe to run again (oc apply is idempotent)
 # Generated YAML saved to ./<cluster-name>/demo-* for inspection
 #
 # Architecture:
-#   Cluster 1: insecure-server, secure-server (mTLS), local clients, dashboard UI
-#   Cluster 2: remote-client, remote-rogue (connect to Cluster 1 via passthrough Route)
+#   Cluster 1: insecure-server, secure-server (mTLS), local clients, fake-client, dashboard UI
+#   Cluster 2 (optional): remote-client, remote-rogue (cross-cluster via passthrough Route)
 #
 # Demo scenarios:
 #   1. Without Zero Trust:      any pod → insecure-server        → HTTP 200 (OPEN)
 #   2. Same cluster mTLS:       authorized client → secure-server → ALLOW
-#   3. Same cluster rogue:      rogue client → secure-server      → DENY
-#   4. Cross-cluster federation: remote client → secure-server     → ALLOW (federation!)
-#   5. Cross-cluster rogue:     remote rogue → secure-server      → DENY
+#   3. Same cluster rogue:      rogue client → secure-server      → DENY (authZ fail)
+#   4. Fake certificate:        self-signed cert → secure-server  → TLS REJECTED (authN fail)
+#   5. Cross-cluster federation: remote client → secure-server     → ALLOW (federation!)
+#   6. Cross-cluster rogue:     remote rogue → secure-server      → DENY
 
 YES=false
 [[ "${1:-}" == "--yes" || "${1:-}" == "-y" ]] && YES=true
@@ -35,16 +36,26 @@ pause() {
 NS=demo-zero-trust
 
 KUBECONFIG1="${KUBECONFIG1:?Export KUBECONFIG1 (e.g. ~/.kube/sno1)}"
-KUBECONFIG2="${KUBECONFIG2:?Export KUBECONFIG2 (e.g. ~/.kube/sno2)}"
+KUBECONFIG2="${KUBECONFIG2:-}"
 
 oc1() { oc --kubeconfig="$KUBECONFIG1" "$@"; }
-oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+if [ -n "$KUBECONFIG2" ]; then
+	oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+	FEDERATION=true
+else
+	FEDERATION=false
+fi
 
 # Auto-detect cluster info
 CN1=$(oc1 whoami --show-server | cut -d. -f2)
-CN2=$(oc2 whoami --show-server | cut -d. -f2)
 APPS1=$(oc1 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
-APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+
+if $FEDERATION; then
+	CN2=$(oc2 whoami --show-server | cut -d. -f2)
+	APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+else
+	CN2="" APPS2=""
+fi
 
 # Trust domain = apps domain (Red Hat recommended so federation Routes resolve
 # via the *.apps wildcard DNS entry without extra Route configuration)
@@ -53,35 +64,41 @@ TD2="$APPS2"
 
 # Route hostnames (OpenShift auto-generates: <route>-<namespace>.<apps-domain>)
 SECURE_SERVER_ROUTE="secure-server-${NS}.${APPS1}"
-REMOTE_CLIENT_ROUTE="remote-client-${NS}.${APPS2}"
-REMOTE_ROGUE_ROUTE="remote-rogue-${NS}.${APPS2}"
 DASHBOARD_ROUTE="dashboard-${NS}.${APPS1}"
+if $FEDERATION; then
+	REMOTE_CLIENT_ROUTE="remote-client-${NS}.${APPS2}"
+	REMOTE_ROGUE_ROUTE="remote-rogue-${NS}.${APPS2}"
+else
+	REMOTE_CLIENT_ROUTE=""
+	REMOTE_ROGUE_ROUTE=""
+fi
 
 # DEMO-HIGHLIGHT: Zero Trust Allow-List (SPIFFE IDs)
 # These are the ONLY identities the secure server will accept.
 # Format: spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>
-# Two entries: one local client-sa, one from the FEDERATED cluster's client-sa.
 # This IS Zero Trust: the server allow-lists cryptographic identities, not IPs or networks.
 # Any pod without a matching SPIFFE ID — even on the same cluster — gets HTTP 403.
-ALLOWED_IDS="spiffe://${TD1}/ns/${NS}/sa/client-sa,spiffe://${TD2}/ns/${NS}/sa/client-sa"
+ALLOWED_IDS="spiffe://${TD1}/ns/${NS}/sa/client-sa"
+$FEDERATION && ALLOWED_IDS="${ALLOWED_IDS},spiffe://${TD2}/ns/${NS}/sa/client-sa"
 
-mkdir -p "$CN1" "$CN2"
+mkdir -p "$CN1"
+$FEDERATION && mkdir -p "$CN2"
 
-echo "Federation Demo Deployment"
+echo "Zero Trust Demo Deployment"
 echo "=========================="
 echo
-echo "Cluster 1 ($CN1): insecure-server, secure-server, local clients, dashboard"
-echo "Cluster 2 ($CN2): remote-client, remote-rogue"
+echo "Cluster 1 ($CN1): insecure-server, secure-server, local clients, fake-client, dashboard"
+$FEDERATION && echo "Cluster 2 ($CN2): remote-client, remote-rogue"
 echo
-echo "Trust domains:       $TD1, $TD2"
+$FEDERATION && echo "Trust domains:       $TD1, $TD2" || echo "Trust domain:        $TD1"
 echo "Secure server route: $SECURE_SERVER_ROUTE (passthrough mTLS)"
 echo "Dashboard URL:       https://$DASHBOARD_ROUTE"
 echo
 echo "Allowed SPIFFE IDs on secure-server:"
 echo "  - spiffe://${TD1}/ns/${NS}/sa/client-sa  (local)"
-echo "  - spiffe://${TD2}/ns/${NS}/sa/client-sa  (federated)"
+$FEDERATION && echo "  - spiffe://${TD2}/ns/${NS}/sa/client-sa  (federated)"
 echo
-echo "Next: Phase 1 -- Create namespace, service accounts, and ConfigMap on both clusters"
+echo "Next: Phase 1 -- Create namespace, service accounts, and ConfigMap"
 pause
 
 ###############################################
@@ -96,9 +113,11 @@ kind: Namespace
 metadata:
   name: $NS
 EOF
-cp $CN1/demo-01-Namespace.yaml $CN2/demo-01-Namespace.yaml
 oc1 apply -f $CN1/demo-01-Namespace.yaml
-oc2 apply -f $CN2/demo-01-Namespace.yaml
+if $FEDERATION; then
+	cp $CN1/demo-01-Namespace.yaml $CN2/demo-01-Namespace.yaml
+	oc2 apply -f $CN2/demo-01-Namespace.yaml
+fi
 
 # ServiceAccounts determine SPIFFE IDs. Each pod's identity is derived from:
 #   spiffe://<trust-domain>/ns/<namespace>/sa/<service-account-name>
@@ -122,10 +141,13 @@ metadata:
   name: rogue-sa
   namespace: $NS
 EOF
-cp $CN1/demo-02-ServiceAccounts.yaml $CN2/demo-02-ServiceAccounts.yaml
 oc1 apply -f $CN1/demo-02-ServiceAccounts.yaml
-oc2 apply -f $CN2/demo-02-ServiceAccounts.yaml
+if $FEDERATION; then
+	cp $CN1/demo-02-ServiceAccounts.yaml $CN2/demo-02-ServiceAccounts.yaml
+	oc2 apply -f $CN2/demo-02-ServiceAccounts.yaml
+fi
 
+if $FEDERATION; then
 # DEMO-HIGHLIGHT: ClusterSPIFFEID — Enables Cross-Cluster Cert Verification
 # Without "federatesWith", workloads only receive their LOCAL trust domain's CA.
 # They can do mTLS within the same cluster, but cannot verify certs from another cluster.
@@ -173,6 +195,7 @@ EOF
 
 oc1 apply -f $CN1/demo-03-ClusterSPIFFEID.yaml
 oc2 apply -f $CN2/demo-03-ClusterSPIFFEID.yaml
+fi  # FEDERATION
 
 ###############################################
 echo
@@ -507,6 +530,149 @@ data:
     print(f"Test agent listening on :{PORT}")
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
+  fake-agent.py: |
+    # DEMO-HIGHLIGHT: Fake Certificate Attack — Authentication Failure
+    # This agent generates a SELF-SIGNED certificate (NOT from SPIRE) and tries
+    # to connect to the secure-server. The TLS handshake FAILS because the server's
+    # ssl.CERT_REQUIRED rejects certs not signed by a trusted CA (SPIRE).
+    #
+    # This demonstrates the AUTHENTICATION layer of Zero Trust:
+    #   - Rogue (valid SPIRE cert, wrong SA): TLS succeeds → HTTP 403 (authZ fail)
+    #   - Fake  (self-signed, no SPIRE):      TLS fails    → no HTTP  (authN fail)
+
+    import json
+    import os
+    import ssl
+    import tempfile
+    import datetime
+    import traceback
+    import urllib.request
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    TARGET_URL = os.environ.get("TARGET_URL", "https://secure-server:8443")
+    PORT = 8080
+
+    # Generate a self-signed certificate with a fake SPIFFE ID
+    print("Generating self-signed (fake) certificate...")
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "fake-identity")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.utcnow())
+        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(hours=1))
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.UniformResourceIdentifier(
+                    "spiffe://fake-trust-domain/ns/attacker/sa/evil"
+                )
+            ]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+
+    cert_path = os.path.join(tempfile.gettempdir(), "fake-cert.pem")
+    key_path = os.path.join(tempfile.gettempdir(), "fake-key.pem")
+    ca_path = os.path.join(tempfile.gettempdir(), "fake-ca.pem")
+
+    with open(cert_path, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(key_path, "wb") as f:
+        f.write(key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ))
+    # Self-signed: the cert IS its own CA (but the server won't trust it)
+    with open(ca_path, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    FAKE_SPIFFE_ID = "spiffe://fake-trust-domain/ns/attacker/sa/evil"
+    print(f"Fake SPIFFE ID: {FAKE_SPIFFE_ID}")
+    print(f"Target: {TARGET_URL}")
+    print("NOTE: Server will REJECT this cert — it is not signed by SPIRE's CA")
+
+    def run_fake_test():
+        try:
+            # Don't verify server's cert (we don't have SPIRE's CA)
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            # Present our self-signed cert — server will reject it
+            ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
+            req = urllib.request.Request(TARGET_URL, method="GET")
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+                body = resp.read().decode().strip()
+                return {
+                    "spiffe_id": FAKE_SPIFFE_ID,
+                    "target": TARGET_URL,
+                    "http_status": resp.status,
+                    "result": "ALLOW",
+                    "detail": body,
+                }
+        except urllib.error.HTTPError as e:
+            body = e.read().decode().strip() if e.fp else str(e)
+            return {
+                "spiffe_id": FAKE_SPIFFE_ID, "target": TARGET_URL,
+                "http_status": e.code, "result": "DENY", "detail": body,
+            }
+        except ssl.SSLError as e:
+            return {
+                "spiffe_id": FAKE_SPIFFE_ID, "target": TARGET_URL,
+                "http_status": 0, "result": "TLS_REJECT",
+                "detail": f"TLS handshake rejected: {e.reason or e}",
+            }
+        except Exception as e:
+            traceback.print_exc()
+            # Most connection resets from mTLS rejection appear here
+            err_str = str(e)
+            if "CERTIFICATE" in err_str.upper() or "SSL" in err_str.upper() \
+               or "Connection reset" in err_str or "EOF" in err_str:
+                return {
+                    "spiffe_id": FAKE_SPIFFE_ID, "target": TARGET_URL,
+                    "http_status": 0, "result": "TLS_REJECT",
+                    "detail": f"TLS handshake rejected: {err_str}",
+                }
+            return {
+                "spiffe_id": FAKE_SPIFFE_ID, "target": TARGET_URL,
+                "http_status": 0, "result": "ERROR", "detail": err_str,
+            }
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/test":
+                data = run_fake_test()
+            elif self.path == "/identity":
+                data = {"spiffe_id": FAKE_SPIFFE_ID, "type": "SELF-SIGNED (fake)"}
+            elif self.path == "/health":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"ok")
+                return
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+
+        def log_message(self, fmt, *args):
+            pass
+
+    print(f"Fake agent listening on :{PORT}")
+    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+
   dashboard.py: |
     # DASHBOARD -- Web UI that orchestrates and displays all test results
     #
@@ -525,6 +691,7 @@ data:
     PORT = 8080
     SECURE_CLIENT_URL = os.environ.get("SECURE_CLIENT_URL", "http://secure-client-svc:8080")
     SECURE_ROGUE_URL = os.environ.get("SECURE_ROGUE_URL", "http://secure-rogue-svc:8080")
+    FAKE_CLIENT_URL = os.environ.get("FAKE_CLIENT_URL", "http://fake-client-svc:8080")
     INSECURE_SERVER_URL = os.environ.get("INSECURE_SERVER_URL", "http://insecure-server:8080")
     REMOTE_CLIENT_URL = os.environ.get("REMOTE_CLIENT_URL", "")
     REMOTE_ROGUE_URL = os.environ.get("REMOTE_ROGUE_URL", "")
@@ -604,6 +771,8 @@ data:
     .badge.deny{background:#ef444420;color:#ef4444}
     .badge.open{background:#f59e0b20;color:#f59e0b}
     .badge.error{background:#8b5cf620;color:#8b5cf6}
+    .badge.tls_reject{background:#dc262620;color:#dc2626}
+    .card.tls_reject{border-left-color:#dc2626;box-shadow:0 0 12px #dc262618}
     .badge.pending{background:#55555530;color:#888}
     .row{display:flex;gap:8px;margin:5px 0;font-size:.88em}
     .row .lbl{color:#93c5fd;font-weight:600;min-width:90px;flex-shrink:0}
@@ -623,7 +792,7 @@ data:
 
       <div class="sec">
         <div class="sec-hdr"><span class="ico">&#x1f512;</span> With Zero Trust &mdash; Same Cluster</div>
-        <p class="sec-desc">Mutual TLS with SPIFFE SVIDs &mdash; the server verifies the caller's cryptographic identity.</p>
+        <p class="sec-desc">Mutual TLS with SPIFFE SVIDs. <b>Rogue</b> = valid cert, wrong identity (authZ fail). <b>Fake</b> = self-signed cert (authN fail).</p>
         <div class="cards">
           <div class="card loading" id="card-client">
             <div class="card-top">
@@ -644,6 +813,16 @@ data:
             <div class="row"><span class="lbl">Account</span><span class="val">rogue-sa</span></div>
             <div class="row"><span class="lbl">Target</span><span class="val">https://secure-server:8443</span></div>
             <div class="card-body" id="body-rogue">Click <b>Run Tests</b> to start</div>
+          </div>
+          <div class="card loading" id="card-fake">
+            <div class="card-top">
+              <span class="card-title">Fake Certificate &#x1f4a3;</span>
+              <span class="badge pending" id="badge-fake">pending</span>
+            </div>
+            <div class="row"><span class="lbl">Identity</span><span class="val" id="id-fake">self-signed (not from SPIRE)</span></div>
+            <div class="row"><span class="lbl">Account</span><span class="val">none &mdash; no SPIRE CSI</span></div>
+            <div class="row"><span class="lbl">Target</span><span class="val">https://secure-server:8443</span></div>
+            <div class="card-body" id="body-fake">Click <b>Run Tests</b> to start</div>
           </div>
         </div>
       </div>
@@ -713,6 +892,7 @@ data:
       setCard('insecure','pending','loading','Testing...');
       setCard('client','pending','loading','Testing...');
       setCard('rogue','pending','loading','Testing...');
+      setCard('fake','pending','loading','Testing...');
       if(CFG.federation){
         setCard('fed-client','pending','loading','Testing...');
         setCard('fed-rogue','pending','loading','Testing...');
@@ -731,6 +911,11 @@ data:
         document.getElementById('id-rogue').textContent=rg.spiffe_id||'n/a';
         setCard('rogue',rg.result.toLowerCase(),rg.result.toLowerCase(),
           'HTTP '+rg.http_status+' &mdash; '+rg.detail);
+        var fk=d.fake_client;
+        document.getElementById('id-fake').textContent=fk.spiffe_id||'self-signed (fake)';
+        var fkBadge=fk.result.toLowerCase();
+        var fkBody=fk.http_status?'HTTP '+fk.http_status+' &mdash; '+fk.detail:'TLS Rejected &mdash; '+fk.detail;
+        setCard('fake',fkBadge,fkBadge,fkBody);
         if(CFG.federation && d.fed_client){
           var fc=d.fed_client;
           document.getElementById('id-fed-client').textContent=fc.spiffe_id||'n/a';
@@ -746,6 +931,7 @@ data:
         setCard('insecure','error','error','Fetch failed: '+e);
         setCard('client','error','error','Fetch failed: '+e);
         setCard('rogue','error','error','Fetch failed: '+e);
+        setCard('fake','error','error','Fetch failed: '+e);
         if(CFG.federation){
           setCard('fed-client','error','error','Fetch failed: '+e);
           setCard('fed-rogue','error','error','Fetch failed: '+e);
@@ -773,6 +959,7 @@ data:
                     "insecure": test_insecure(),
                     "secure_client": fetch_json(SECURE_CLIENT_URL + "/test"),
                     "secure_rogue": fetch_json(SECURE_ROGUE_URL + "/test"),
+                    "fake_client": fetch_json(FAKE_CLIENT_URL + "/test"),
                     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 }
                 if FEDERATION_ENABLED:
@@ -801,9 +988,11 @@ data:
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 EOF
 
-cp $CN1/demo-04-ConfigMap.yaml $CN2/demo-04-ConfigMap.yaml
 oc1 apply -f $CN1/demo-04-ConfigMap.yaml
-oc2 apply -f $CN2/demo-04-ConfigMap.yaml
+if $FEDERATION; then
+	cp $CN1/demo-04-ConfigMap.yaml $CN2/demo-04-ConfigMap.yaml
+	oc2 apply -f $CN2/demo-04-ConfigMap.yaml
+fi
 
 ###############################################
 echo
@@ -1097,6 +1286,73 @@ spec:
 EOF
 
 echo
+echo "--- Fake Client (self-signed cert, NO SPIRE) ---"
+
+# DEMO-HIGHLIGHT: Fake Certificate Attack — No SPIRE, No Trust
+# This pod does NOT mount the SPIFFE CSI driver. It generates a self-signed
+# certificate and tries to connect to the secure-server. The TLS handshake
+# is REJECTED because the cert is not signed by any SPIRE-trusted CA.
+# This shows the AUTHENTICATION layer: you can't even start a conversation
+# without a cert from a trusted identity provider (SPIRE).
+tee $CN1/demo-08b-FakeClient.yaml <<EOF | oc1 apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fake-client
+  namespace: $NS
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fake-client
+  template:
+    metadata:
+      labels:
+        app: fake-client
+    spec:
+      # NO serviceAccountName needed — this pod doesn't use SPIRE at all
+      containers:
+      - name: fake-client
+        image: registry.redhat.io/ubi9/python-311:latest
+        command:
+          - /bin/bash
+          - -lc
+          - pip install -q cryptography && python /app/fake-agent.py
+        env:
+          - name: TARGET_URL
+            value: https://secure-server:8443
+        ports:
+          - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+          - name: app-scripts
+            mountPath: /app
+            readOnly: true
+      # NOTE: No SPIFFE CSI volume — this pod has NO access to SPIRE
+      volumes:
+        - name: app-scripts
+          configMap:
+            name: mtls-demo-scripts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fake-client-svc
+  namespace: $NS
+spec:
+  selector:
+    app: fake-client
+  ports:
+    - port: 8080
+      targetPort: 8080
+EOF
+
+echo
 echo "--- Dashboard ---"
 
 tee $CN1/demo-09-Dashboard.yaml <<EOF | oc1 apply -f -
@@ -1127,12 +1383,14 @@ spec:
             value: http://secure-client-svc:8080
           - name: SECURE_ROGUE_URL
             value: http://secure-rogue-svc:8080
+          - name: FAKE_CLIENT_URL
+            value: http://fake-client-svc:8080
           - name: INSECURE_SERVER_URL
             value: http://insecure-server:8080
           - name: REMOTE_CLIENT_URL
-            value: "https://${REMOTE_CLIENT_ROUTE}"
+            value: "${REMOTE_CLIENT_ROUTE:+https://${REMOTE_CLIENT_ROUTE}}"
           - name: REMOTE_ROGUE_URL
-            value: "https://${REMOTE_ROGUE_ROUTE}"
+            value: "${REMOTE_ROGUE_ROUTE:+https://${REMOTE_ROGUE_ROUTE}}"
           - name: CLUSTER1_NAME
             value: "$CN1"
           - name: CLUSTER2_NAME
@@ -1194,6 +1452,7 @@ spec:
     insecureEdgeTerminationPolicy: Redirect
 EOF
 
+if $FEDERATION; then
 ###############################################
 echo
 echo "=========================================="
@@ -1387,6 +1646,8 @@ spec:
     insecureEdgeTerminationPolicy: Redirect
 EOF
 
+fi  # FEDERATION (Phase 4)
+
 ###############################################
 echo
 echo "=========================================="
@@ -1400,13 +1661,16 @@ oc1 wait --for=condition=ready pod -l app=insecure-server -n $NS --timeout=120s
 oc1 wait --for=condition=ready pod -l app=secure-server -n $NS --timeout=300s
 oc1 wait --for=condition=ready pod -l app=secure-client -n $NS --timeout=300s
 oc1 wait --for=condition=ready pod -l app=secure-rogue -n $NS --timeout=300s
+oc1 wait --for=condition=ready pod -l app=fake-client -n $NS --timeout=120s
 oc1 wait --for=condition=ready pod -l app=dashboard -n $NS --timeout=120s
 
-echo
-echo "--- Cluster 2 ($CN2) ---"
-oc2 get pods -n $NS
-oc2 wait --for=condition=ready pod -l app=remote-client -n $NS --timeout=300s
-oc2 wait --for=condition=ready pod -l app=remote-rogue -n $NS --timeout=300s
+if $FEDERATION; then
+	echo
+	echo "--- Cluster 2 ($CN2) ---"
+	oc2 get pods -n $NS
+	oc2 wait --for=condition=ready pod -l app=remote-client -n $NS --timeout=300s
+	oc2 wait --for=condition=ready pod -l app=remote-rogue -n $NS --timeout=300s
+fi
 
 echo
 echo "=========================================="
@@ -1417,14 +1681,16 @@ echo
 echo "Cluster 1 routes:"
 oc1 get routes -n $NS
 
-echo
-echo "Cluster 2 routes:"
-oc2 get routes -n $NS
+if $FEDERATION; then
+	echo
+	echo "Cluster 2 routes:"
+	oc2 get routes -n $NS
+fi
 
 echo
 echo "Generated YAML saved to:"
 ls -1 $CN1/demo-*.yaml
-ls -1 $CN2/demo-*.yaml
+$FEDERATION && ls -1 $CN2/demo-*.yaml
 
 echo
 echo "=========================================="
@@ -1436,6 +1702,9 @@ echo
 echo "Open the dashboard and click 'Run Tests' to see:"
 echo "  1. Insecure server      → HTTP 200 (OPEN)"
 echo "  2. Authorized client    → ALLOW   (same cluster mTLS)"
-echo "  3. Rogue client         → DENY    (same cluster mTLS)"
-echo "  4. Federated client     → ALLOW   (cross-cluster federation!)"
-echo "  5. Federated rogue      → DENY    (cross-cluster federation)"
+echo "  3. Rogue client         → DENY    (authZ fail: valid cert, wrong identity)"
+echo "  4. Fake certificate     → TLS REJECTED (authN fail: self-signed, not from SPIRE)"
+if $FEDERATION; then
+echo "  5. Federated client     → ALLOW   (cross-cluster federation!)"
+echo "  6. Federated rogue      → DENY    (cross-cluster federation)"
+fi

@@ -119,13 +119,36 @@ This is a cryptographic identity — you can't forge it.
 ### 4.3 The Zero Trust Decision — Allow or Deny
 The server compares the caller's SPIFFE ID against the allow-list.
 Allowed → HTTP 200.  Not allowed → HTTP 403.
-No IP checks, no network policies, no firewall rules — just cryptographic
-identity.  A "rogue" pod on the **same** cluster gets DENIED.
-An authorized pod on a **different** cluster gets ALLOWED.
+
+**Key distinction — Authentication vs. Authorization:**
+The rogue pod **passes authentication** — its SVID is a real, valid X.509
+certificate issued by SPIRE, signed by the cluster's trusted CA.  The TLS
+handshake succeeds because the server recognizes the CA.  But the rogue's
+SPIFFE ID (`rogue-sa`) is **not on the allow-list**, so it fails
+**authorization** and gets HTTP 403.  This is the classic authn-vs-authz
+split: "I know who you are, but you're not allowed in."
 
 📍 [`demo-go.sh` L257-263](https://github.com/sjbylo/ztidm-federation-demo/blob/63e923be0d33517f3ee582a6fefc629ace404ddd/demo-go.sh#L257-L263)
 
-### 4.4 SPIFFE Identity Model — URI SANs, Not Hostnames
+### 4.4 Fake Certificate Attack — Authentication Failure
+A pod with a **self-signed certificate** (not issued by SPIRE) tries to
+connect.  The TLS handshake itself **fails** — the server's
+`ssl.CERT_REQUIRED` rejects the cert because it was not signed by any
+trusted CA (local or federated).  No HTTP response is generated at all.
+
+This is the other side of the coin: the rogue gets past authentication
+(valid cert) but fails authorization (wrong identity).  The fake cert
+fails **authentication** — it never even gets to the authorization check.
+
+| Scenario | TLS Handshake | HTTP Response | Failure Layer |
+|---|---|---|---|
+| Authorized client | ✅ passes | 200 ALLOW | — |
+| Rogue (valid SPIRE cert) | ✅ passes | 403 DENY | Authorization |
+| Fake cert (self-signed) | ❌ rejected | none | Authentication |
+
+📍 [`demo-go.sh` — fake-agent.py in ConfigMap](https://github.com/sjbylo/ztidm-federation-demo/blob/main/demo-go.sh)
+
+### 4.5 SPIFFE Identity Model — URI SANs, Not Hostnames
 `check_hostname = False` because SPIFFE doesn't use DNS names for identity.
 Identity is a URI SAN: `spiffe://<trust-domain>/ns/<ns>/sa/<sa>`.
 The cert is still fully verified (CERT_REQUIRED + trusted CA chain) —
@@ -162,6 +185,7 @@ automatic; Zero Trust doesn't mean operational burden.
 │ 3. DELIVERY:  CSI driver → Workload API → certs to pods     │
 │ 4. TRANSPORT: Passthrough Route → end-to-end mTLS           │
 │ 5. DECISION:  Extract SPIFFE ID → check allow-list → 200/403│
+│    ATTACK:   Fake cert → TLS rejected (never reaches app)   │
 │ 6. LIFECYCLE: 1h SVIDs, background reload, zero downtime    │
 └─────────────────────────────────────────────────────────────┘
 ```

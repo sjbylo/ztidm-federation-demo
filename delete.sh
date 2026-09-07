@@ -1,10 +1,12 @@
 #!/bin/bash -e
-# Full ZTIDM + SPIRE Federation teardown on two clusters
+# Full ZTIDM + SPIRE Federation teardown on one or two clusters
 # Exact reverse of go.sh -- deletes everything in safe dependency order
 #
 # Usage:
-#   export KUBECONFIG1=~/.kube/sno1 KUBECONFIG2=~/.kube/sno2
-#   ./delete.sh
+#   export KUBECONFIG1=~/.kube/sno1
+#   export KUBECONFIG2=~/.kube/sno2   # optional: omit for single-cluster
+#   ./delete.sh          # interactive
+#   ./delete.sh --yes    # non-interactive
 #
 # Re-runnable: --ignore-not-found on all deletes, safe if partially deleted already
 
@@ -19,17 +21,28 @@ pause() {
 NS=zero-trust-workload-identity-manager
 
 KUBECONFIG1="${KUBECONFIG1:?Export KUBECONFIG1 (e.g. ~/.kube/sno1)}"
-KUBECONFIG2="${KUBECONFIG2:?Export KUBECONFIG2 (e.g. ~/.kube/sno2)}"
+KUBECONFIG2="${KUBECONFIG2:-}"
 
 oc1() { oc --kubeconfig="$KUBECONFIG1" "$@"; }
-oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+if [ -n "$KUBECONFIG2" ]; then
+	oc2() { oc --kubeconfig="$KUBECONFIG2" "$@"; }
+	FEDERATION=true
+else
+	FEDERATION=false
+fi
 
 CN1=$(oc1 whoami --show-server | cut -d. -f2)
-CN2=$(oc2 whoami --show-server | cut -d. -f2)
+if $FEDERATION; then
+	CN2=$(oc2 whoami --show-server | cut -d. -f2)
+	CLUSTERS="1 2"
+else
+	CN2=""
+	CLUSTERS="1"
+fi
 
 echo "Will DELETE all ZTIDM + Federation resources from:"
 echo "  Cluster 1: $CN1 ($(oc1 whoami --show-server))"
-echo "  Cluster 2: $CN2 ($(oc2 whoami --show-server))"
+$FEDERATION && echo "  Cluster 2: $CN2 ($(oc2 whoami --show-server))"
 echo
 echo "This removes: federation, all operands, operator, PVCs, CRDs, namespace."
 echo "THIS CANNOT BE UNDONE."
@@ -42,6 +55,7 @@ if [ "$yn" != "yes" ]; then
 fi
 
 ###############################################
+if $FEDERATION; then
 echo
 echo "=========================================="
 echo "  Phase 1: Remove Federation Resources"
@@ -59,7 +73,7 @@ for i in 1 2; do
 
 	echo "  ClusterFederatedTrustDomains:"
 	$OC get clusterfederatedtrustdomains --ignore-not-found
-	$OC delete clusterfederatedtrustdomain federation-to-${REMOTE} --ignore-not-found --wait=true
+	$OC delete clusterfederatedtrustdomain federation-to-${REMOTE} --ignore-not-found --timeout=60s
 	echo "  Deleted."
 
 done
@@ -69,13 +83,15 @@ echo "Verify federation resources gone:"
 oc1 get clusterfederatedtrustdomains --ignore-not-found
 oc2 get clusterfederatedtrustdomains --ignore-not-found
 
+fi  # FEDERATION
+
 ###############################################
 echo
 echo "=========================================="
 echo "  Phase 2: Delete Operands (reverse order)"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -88,21 +104,21 @@ for i in 1 2; do
 	###############################################
 	echo "  SpireOIDCDiscoveryProvider..."
 	$OC get deployment -l app.kubernetes.io/name=spiffe-oidc-discovery-provider -n $NS --ignore-not-found
-	$OC delete SpireOIDCDiscoveryProvider cluster --ignore-not-found --wait=true
+	$OC delete SpireOIDCDiscoveryProvider cluster --ignore-not-found --timeout=120s
 	$OC wait --for=delete pod -l app.kubernetes.io/name=spiffe-oidc-discovery-provider -n $NS --timeout=120s || true
 	echo "  Gone."
 
 	###############################################
 	echo "  SpiffeCSIDriver..."
 	$OC get daemonset -l app.kubernetes.io/component=csi -n $NS --ignore-not-found
-	$OC delete SpiffeCSIDriver cluster --ignore-not-found --wait=true
+	$OC delete SpiffeCSIDriver cluster --ignore-not-found --timeout=120s
 	$OC wait --for=delete pod -l app.kubernetes.io/component=csi -n $NS --timeout=120s || true
 	echo "  Gone."
 
 	###############################################
 	echo "  SpireAgent..."
 	$OC get daemonset -l app.kubernetes.io/component=node-agent -n $NS --ignore-not-found
-	$OC delete SpireAgent cluster --ignore-not-found --wait=true
+	$OC delete SpireAgent cluster --ignore-not-found --timeout=120s
 	$OC wait --for=delete pod -l app.kubernetes.io/component=node-agent -n $NS --timeout=120s || true
 	echo "  Gone."
 
@@ -111,18 +127,18 @@ for i in 1 2; do
 	$OC get statefulset -l app.kubernetes.io/component=control-plane -n $NS --ignore-not-found
 	$OC get po -l app.kubernetes.io/component=control-plane -n $NS --ignore-not-found
 	$OC get pvc -l app.kubernetes.io/component=control-plane -n $NS --ignore-not-found
-	$OC delete SpireServer cluster --ignore-not-found --wait=true
+	$OC delete SpireServer cluster --ignore-not-found --timeout=120s
 	$OC wait --for=delete pod -l app.kubernetes.io/component=control-plane -n $NS --timeout=120s || true
 	echo "  Gone."
 
 	###############################################
 	echo "  ZeroTrustWorkloadIdentityManager..."
-	$OC delete ZeroTrustWorkloadIdentityManager cluster --ignore-not-found --wait=true
+	$OC delete ZeroTrustWorkloadIdentityManager cluster --ignore-not-found --timeout=120s
 	echo "  Gone."
 
 	###############################################
 	echo "  PVCs..."
-	$OC delete pvc -l app.kubernetes.io/name=spire-server -n $NS --ignore-not-found --wait=true
+	$OC delete pvc -l app.kubernetes.io/name=spire-server -n $NS --ignore-not-found --timeout=120s
 	echo "  Gone."
 
 	echo
@@ -147,7 +163,7 @@ echo "=========================================="
 echo "  Phase 3: Uninstall Operator"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -158,13 +174,13 @@ for i in 1 2; do
 	echo "--- Uninstalling operator on $CN ---"
 
 	echo "  Deleting Subscription..."
-	$OC delete subscription openshift-zero-trust-workload-identity-manager -n $NS --ignore-not-found --wait=true
+	$OC delete subscription openshift-zero-trust-workload-identity-manager -n $NS --ignore-not-found --timeout=60s
 
 	echo "  Deleting CSVs..."
-	$OC delete csv --all -n $NS --ignore-not-found --wait=true
+	$OC delete csv --all -n $NS --ignore-not-found --timeout=120s
 
 	echo "  Deleting OperatorGroup..."
-	$OC delete operatorgroup openshift-zero-trust-workload-identity-manager -n $NS --ignore-not-found --wait=true
+	$OC delete operatorgroup openshift-zero-trust-workload-identity-manager -n $NS --ignore-not-found --timeout=60s
 
 	echo "  Verify operator deployment gone..."
 	$OC get deployment -n $NS --no-headers --ignore-not-found 2>&1 | grep -q "zero-trust" && {
@@ -184,7 +200,7 @@ echo "=========================================="
 echo "  Phase 4: Clean Up Cluster-Scoped Resources"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -207,7 +223,7 @@ for i in 1 2; do
 	$OC delete validatingwebhookconfigurations -l app.kubernetes.io/name=zero-trust-workload-identity-manager --ignore-not-found
 
 	echo "  Namespace..."
-	$OC delete namespace $NS --ignore-not-found --wait=true
+	$OC delete namespace $NS --ignore-not-found --timeout=300s
 
 	echo "  Verify namespace gone..."
 	$OC get namespace $NS --ignore-not-found 2>&1 | grep -q "Active" && {
@@ -226,7 +242,7 @@ echo "=========================================="
 echo "  Phase 5: Delete CRDs"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -256,7 +272,7 @@ echo "=========================================="
 echo "  Verification"
 echo "=========================================="
 
-for i in 1 2; do
+for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then
 		OC=oc1; CN=$CN1
 	else
@@ -277,4 +293,4 @@ for i in 1 2; do
 done
 
 echo
-echo "DONE -- all ZTIDM resources removed from both clusters."
+echo "DONE -- all ZTIDM resources removed from ${FEDERATION:+both }cluster(s)."
