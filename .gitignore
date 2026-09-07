@@ -1,6 +1,9 @@
-# Generated YAML output directories (one per cluster)
+# Generated YAML output directories (one per cluster, named dynamically)
 mesh*/
 sno*/
+ocp*/
+cluster-*/
+sandbox*/
 
 # Editor files
 *.swp

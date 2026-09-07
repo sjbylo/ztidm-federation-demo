@@ -59,11 +59,14 @@ Drop `--yes` for interactive mode (pauses between phases).
 
 ## Teardown
 
+**Always delete the demo first**, then infrastructure (the CSI driver must
+be running for demo pods to unmount cleanly):
+
 ```bash
-# Remove demo app only (keeps ZTIDM infrastructure)
+# 1. Remove demo app only (keeps ZTIDM infrastructure)
 ./delete-demo.sh --yes
 
-# Full teardown (operator, CRDs, everything)
+# 2. Full teardown (operator, CRDs, everything)
 ./delete-infra.sh --yes
 ```
 
