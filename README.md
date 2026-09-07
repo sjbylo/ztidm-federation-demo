@@ -27,6 +27,7 @@ A **web dashboard** shows all results in real-time.
 ## Prerequisites
 
 - **One or two OpenShift 4.16+ clusters** (any topology: SNO, compact, standard)
+- **For two clusters**: each cluster must be able to reach the other's `*.apps` routes (e.g. two clusters on the same public cloud, or on-prem clusters with shared DNS)
 - **A StorageClass** (cloud/vSphere clusters have one by default; bare-metal SNO may need `install_and_config_lvm_op.sh`)
 - **OperatorHub access** (or a mirror containing the ZTIDM operator)
 - **`oc`** and **`jq`** on the workstation
