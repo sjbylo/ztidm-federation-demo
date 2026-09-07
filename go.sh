@@ -148,16 +148,15 @@ for i in $CLUSTERS; do
 
 	echo "  Waiting for CSV to appear..."
 	for attempt in $(seq 1 60); do
-		if $OC get csv -n $NS -l operators.coreos.com/openshift-zero-trust-workload-identity-manager.$NS --no-headers 2>/dev/null | grep -q .; then
+		if $OC get csv -n $NS --no-headers 2>/dev/null | grep -q "zero-trust-workload-identity-manager"; then
 			break
 		fi
 		sleep 5
 	done
 
-	echo "  Waiting for CSV to succeed..."
-	$OC wait csv -n $NS \
-		-l operators.coreos.com/openshift-zero-trust-workload-identity-manager.$NS \
-		--for=jsonpath='{.status.phase}'=Succeeded --timeout=10m
+	CSV_NAME=$($OC get csv -n $NS --no-headers 2>/dev/null | awk '/zero-trust-workload-identity-manager/{print $1; exit}')
+	echo "  CSV: $CSV_NAME — waiting for Succeeded..."
+	$OC wait csv/"$CSV_NAME" -n $NS --for=jsonpath='{.status.phase}'=Succeeded --timeout=10m
 
 	echo "  Waiting for operator deployment..."
 	$OC rollout status deployment -l name=zero-trust-workload-identity-manager -n $NS --timeout=5m
