@@ -1,5 +1,7 @@
 #!/bin/bash -e
 # Install LVMS operator and configure LVMCluster on one or two OpenShift clusters.
+# Only needed for bare-metal / SNO clusters that have no default StorageClass.
+# Cloud (AWS/GCP/Azure/ROSA/ARO) and vSphere clusters already have storage — skip this.
 # Auto-detects the correct subscription channel from each cluster's OCP version.
 #
 # Usage:

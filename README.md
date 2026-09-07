@@ -27,7 +27,7 @@ A **web dashboard** shows all results in real-time.
 ## Prerequisites
 
 - **One or two OpenShift 4.16+ clusters** (any topology: SNO, compact, standard)
-- **Default StorageClass** (for the SPIRE Server PVC — run `install_and_config_lvm_op.sh` if needed)
+- **A StorageClass** (cloud/vSphere clusters have one by default; bare-metal SNO may need `install_and_config_lvm_op.sh`)
 - **OperatorHub access** (or a mirror containing the ZTIDM operator)
 - **`oc`** and **`jq`** on the workstation
 
@@ -40,7 +40,7 @@ No bastion DNS needed — all network operations run from inside the clusters.
 export KUBECONFIG1=~/.kube/cluster1
 export KUBECONFIG2=~/.kube/cluster2
 
-# (Optional) Install LVM Storage if no default StorageClass exists
+# (Optional) Bare-metal SNO only: install LVM Storage if no StorageClass exists
 ./install_and_config_lvm_op.sh
 
 # Install ZTIDM + SPIRE (+ federation if two clusters)
@@ -70,7 +70,7 @@ Drop `--yes` for interactive mode (pauses between phases).
 
 | Symptom | Fix |
 |---------|-----|
-| SpireServer PVC stuck `Pending` | No default StorageClass — run `install_and_config_lvm_op.sh` |
+| SpireServer PVC stuck `Pending` | No StorageClass — run `install_and_config_lvm_op.sh` (bare-metal SNO) |
 | SPIRE agent `CrashLoopBackOff` with `lookup <node>: no such host` | Add node DNS records (see below) |
 | Federation endpoint returns `EOF` | Wait 1–2 min for both SPIRE servers to start |
 | Namespace stuck `Terminating` | Force-delete stuck pods, then clear namespace finalizers |
@@ -96,7 +96,7 @@ oc patch dns.operator/default --type=merge -p '{
 | `go-demo.sh` | Deploy the demo application + dashboard |
 | `delete-infra.sh` | Full teardown |
 | `delete-demo.sh` | Remove demo only (keeps infrastructure) |
-| `install_and_config_lvm_op.sh` | Optional: install LVM Storage |
+| `install_and_config_lvm_op.sh` | Optional: install LVM Storage (bare-metal SNO only) |
 | `DEMO-WALKTHROUGH.md` | Guided walkthrough with code links |
 
 ## References

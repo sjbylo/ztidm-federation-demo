@@ -42,12 +42,12 @@ fi
 # Auto-detect cluster info
 CN1=$(oc1 whoami --show-server | cut -d. -f2)
 APPS1=$(oc1 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
-SC1=$(oc1 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+SC1=$(oc1 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
 
 if $FEDERATION; then
 	CN2=$(oc2 whoami --show-server | cut -d. -f2)
 	APPS2=$(oc2 get ingresses.config/cluster -o jsonpath='{.spec.domain}')
-	SC2=$(oc2 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+	SC2=$(oc2 get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
 else
 	CN2="" APPS2="" SC2=""
 fi
@@ -66,14 +66,14 @@ echo "Cluster 1: $CN1"
 echo "  API:           $(oc1 whoami --show-server)"
 echo "  Apps domain:   $APPS1"
 echo "  Trust domain:  $TD1"
-echo "  Storage class: $SC1"
+echo "  Storage class: ${SC1:-<default>}"
 if $FEDERATION; then
 	echo
 	echo "Cluster 2: $CN2"
 	echo "  API:           $(oc2 whoami --show-server)"
 	echo "  Apps domain:   $APPS2"
 	echo "  Trust domain:  $TD2"
-	echo "  Storage class: $SC2"
+	echo "  Storage class: ${SC2:-<default>}"
 fi
 echo
 echo "Mode: $($FEDERATION && echo "Two-cluster federation (https_spiffe)" || echo "Single cluster")"
@@ -232,7 +232,7 @@ spec:
   persistence:
     size: "5Gi"
     accessMode: "ReadWriteOnce"
-    storageClass: "$SC"
+$([ -n "$SC" ] && echo "    storageClass: \"$SC\"")
   datastore:
     databaseType: "sqlite3"
     connectionString: "/run/spire/data/datastore.sqlite3"
