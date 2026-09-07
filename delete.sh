@@ -62,7 +62,8 @@ DEMO_NS=demo-zero-trust
 for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then OC=oc1; CN=$CN1; else OC=oc2; CN=$CN2; fi
 	if $OC get namespace $DEMO_NS &>/dev/null; then
-		echo "Deleting demo namespace '$DEMO_NS' on $CN first (CSI volumes need the driver)..."
+		echo "WARNING: Demo namespace '$DEMO_NS' still exists on $CN."
+		echo "  Deleting it first (pods need the CSI driver to unmount cleanly)."
 		$OC delete clusterspiffeid demo-federation --ignore-not-found 2>/dev/null || true
 		$OC delete namespace $DEMO_NS --timeout=120s 2>/dev/null || {
 			echo "  Force-deleting stuck pods..."
