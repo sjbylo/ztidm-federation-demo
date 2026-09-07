@@ -1,13 +1,19 @@
-#!/bin/bash
-# Install LVMS operator and configure LVMCluster on two OpenShift clusters.
+#!/bin/bash -e
+# Install LVMS operator and configure LVMCluster on one or two OpenShift clusters.
 # Auto-detects the correct subscription channel from each cluster's OCP version.
+#
+# Usage:
+#   export KUBECONFIG1=~/.kube/sno1
+#   export KUBECONFIG2=~/.kube/sno2   # optional: omit for single-cluster
+#   ./install_and_config_lvm_op.sh
 
-set -e
+KUBECONFIG1="${KUBECONFIG1:?Export KUBECONFIG1 (e.g. ~/.kube/sno1)}"
+KUBECONFIG2="${KUBECONFIG2:-}"
 
-KC1=~/aba/mesh1/iso-agent-based/auth/kubeconfig
-KC2=~/aba/mesh2/iso-agent-based/auth/kubeconfig
+KUBECONFIGS="$KUBECONFIG1"
+[ -n "$KUBECONFIG2" ] && KUBECONFIGS="$KUBECONFIG1 $KUBECONFIG2"
 
-for KC in $KC1 $KC2; do
+for KC in $KUBECONFIGS; do
 	cluster=$(oc --kubeconfig="$KC" whoami --show-server | cut -d. -f2)
 
 	# Detect OCP minor version (e.g. 4.22 -> stable-4.22)
@@ -88,7 +94,10 @@ EOF
 done
 
 # Verify
-echo "=== mesh1 ==="
-oc --kubeconfig="$KC1" get storageclass
-echo "=== mesh2 ==="
-oc --kubeconfig="$KC2" get storageclass
+echo "=== Storage Classes ==="
+for KC in $KUBECONFIGS; do
+	cluster=$(oc --kubeconfig="$KC" whoami --show-server | cut -d. -f2)
+	echo "--- $cluster ---"
+	oc --kubeconfig="$KC" get storageclass
+	echo
+done
