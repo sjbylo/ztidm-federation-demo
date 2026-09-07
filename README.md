@@ -7,6 +7,8 @@ operator on OpenShift. Works on **one cluster** (same-cluster mTLS) or
 
 No shared secrets, no IP allow-lists, no sidecars.
 
+![Federation Architecture](diagrams/federation-architecture.png)
+
 ## What the demo shows
 
 | # | Scenario | Result | Why |
