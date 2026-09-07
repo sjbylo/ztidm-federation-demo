@@ -55,21 +55,16 @@ if [ "$yn" != "yes" ]; then
 fi
 
 ###############################################
-# Delete the demo FIRST — its pods depend on the CSI driver.
-# If we tear down ZTIDM infrastructure first, pods can't unmount
-# their SPIFFE CSI volumes and the namespace gets stuck Terminating.
+# Check the demo is deleted BEFORE tearing down infrastructure.
+# Demo pods depend on the CSI driver to unmount cleanly.
 DEMO_NS=demo-zero-trust
 for i in $CLUSTERS; do
 	if [ "$i" = "1" ]; then OC=oc1; CN=$CN1; else OC=oc2; CN=$CN2; fi
 	if $OC get namespace $DEMO_NS &>/dev/null; then
-		echo "WARNING: Demo namespace '$DEMO_NS' still exists on $CN."
-		echo "  Deleting it first (pods need the CSI driver to unmount cleanly)."
-		$OC delete clusterspiffeid demo-federation --ignore-not-found 2>/dev/null || true
-		$OC delete namespace $DEMO_NS --timeout=120s 2>/dev/null || {
-			echo "  Force-deleting stuck pods..."
-			$OC delete pods --all -n $DEMO_NS --force --grace-period=0 2>/dev/null || true
-			$OC delete namespace $DEMO_NS --timeout=60s 2>/dev/null || true
-		}
+		echo "ERROR: Demo namespace '$DEMO_NS' still exists on $CN."
+		echo "  Run ./delete-demo.sh first, then re-run ./delete-infra.sh"
+		echo "  (Demo pods need the CSI driver to unmount cleanly.)"
+		exit 1
 	fi
 done
 
