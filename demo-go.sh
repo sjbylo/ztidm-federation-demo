@@ -1076,6 +1076,11 @@ spec:
             value: "$ALLOWED_IDS"
         ports:
           - containerPort: 8443
+        readinessProbe:
+          tcpSocket:
+            port: 8443
+          initialDelaySeconds: 30
+          periodSeconds: 10
         volumeMounts:
           - name: app-scripts
             mountPath: /app
