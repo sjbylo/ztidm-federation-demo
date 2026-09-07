@@ -145,9 +145,22 @@ for i in $CLUSTERS; do
 	echo
 	echo "--- Waiting for operator on $CN ---"
 	$OC get subscription -n $NS
-	$OC get csv -n $NS
-	$OC get deployment -l name=zero-trust-workload-identity-manager -n $NS
-	$OC rollout status deployment -l name=zero-trust-workload-identity-manager -n $NS --timeout=10m
+
+	echo "  Waiting for CSV to appear..."
+	for attempt in $(seq 1 60); do
+		if $OC get csv -n $NS -l operators.coreos.com/openshift-zero-trust-workload-identity-manager.$NS --no-headers 2>/dev/null | grep -q .; then
+			break
+		fi
+		sleep 5
+	done
+
+	echo "  Waiting for CSV to succeed..."
+	$OC wait csv -n $NS \
+		-l operators.coreos.com/openshift-zero-trust-workload-identity-manager.$NS \
+		--for=jsonpath='{.status.phase}'=Succeeded --timeout=10m
+
+	echo "  Waiting for operator deployment..."
+	$OC rollout status deployment -l name=zero-trust-workload-identity-manager -n $NS --timeout=5m
 
 done
 
@@ -170,6 +183,14 @@ for i in $CLUSTERS; do
 
 	echo
 	echo "--- Deploying operands on $CN ---"
+
+	echo "  Waiting for CRDs to be registered..."
+	for attempt in $(seq 1 60); do
+		if $OC get crd zerotrustworkloadidentitymanagers.operator.openshift.io &>/dev/null; then
+			break
+		fi
+		sleep 5
+	done
 
 	###############################################
 	echo "  ZeroTrustWorkloadIdentityManager..."
