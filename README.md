@@ -24,6 +24,8 @@ Scenarios 5–6 only appear when two clusters are configured.
 
 A **web dashboard** shows all results in real-time.
 
+📖 **Presenting this demo?** See the [`DEMO-WALKTHROUGH.md`](DEMO-WALKTHROUGH.md) for a guided narrative with direct links to every key code section.
+
 ## Prerequisites
 
 - **One or two OpenShift 4.16+ clusters** (any topology: SNO, compact, standard)
@@ -101,7 +103,7 @@ oc patch dns.operator/default --type=merge -p '{
 | `delete-infra.sh` | Full teardown |
 | `delete-demo.sh` | Remove demo only (keeps infrastructure) |
 | `install_and_config_lvm_op.sh` | Optional: install LVM Storage (bare-metal SNO only) |
-| `DEMO-WALKTHROUGH.md` | Guided walkthrough with code links |
+| [`DEMO-WALKTHROUGH.md`](DEMO-WALKTHROUGH.md) | Guided walkthrough with code links |
 
 ## References
 
