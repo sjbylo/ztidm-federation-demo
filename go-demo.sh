@@ -98,6 +98,19 @@ echo "Next: Phase 1 -- Create namespace, service accounts, and ConfigMap"
 pause
 
 ###############################################
+# Verify ZTIDM infrastructure is installed
+INFRA_NS=zero-trust-workload-identity-manager
+if ! oc1 get namespace $INFRA_NS &>/dev/null; then
+	echo "ERROR: ZTIDM infrastructure not found on $CN1."
+	echo "  Run ./go-infra.sh first, then re-run ./go-demo.sh"
+	exit 1
+fi
+if $FEDERATION && ! oc2 get namespace $INFRA_NS &>/dev/null; then
+	echo "ERROR: ZTIDM infrastructure not found on $CN2."
+	echo "  Run ./go-infra.sh first, then re-run ./go-demo.sh"
+	exit 1
+fi
+
 echo
 echo "=========================================="
 echo "  Phase 1: Namespace & Service Accounts"
